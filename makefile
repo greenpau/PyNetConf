@@ -3,6 +3,7 @@ APP_VERSION=1.0
 APP_DIR=${APP_NAME}-${APP_VERSION}
 BACKUP_DIR=~/dev/backup
 BACKUP_FILE=$(BACKUP_DIR)/$(APP_NAME).$(APP_VERSION).backup.`date '+%Y%m%d.%H%M%S'`.tar.gz
+GIT_USER=greenpau
 
 all:
 	@echo "Running full deployment ..."
