@@ -1,5 +1,6 @@
 # User-Defined
-README.dev
+README.netconf.dev
+README.git.dev
 MANIFEST
 dist/
 tests/test.py

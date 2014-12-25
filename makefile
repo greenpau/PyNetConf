@@ -27,7 +27,7 @@ clean:
 backup:
 	@echo "Backup ..."
 	@mkdir -p ${BACKUP_DIR}
-	@cd ..; tar -cvzf $(BACKUP_FILE) --exclude='*/.git*' ${APP_DIR}; cd ${APP_DIR}
+	@cd ..; tar -cvzf $(BACKUP_FILE) --exclude='*/.git*' ${APP_NAME}; cd ${APP_NAME}
 	@echo "Completed! Run \"tar -ztvf $(BACKUP_FILE)\" to verify ..."
 
 git:
