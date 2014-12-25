@@ -1,9 +1,18 @@
+# Prerequisites:
+#  - Set DEV_BACKUP_DIR environment variable via /etc/profile.d/developer.sh   
+#    
+#    sudo bash -c "echo '# User Development Environment' > /etc/profile.d/developer.sh"
+#    sudo bash -c "echo 'DEV_BACKUP_DIR=~/dev/backup' >> /etc/profile.d/developer.sh"
+#    sudo bash -c "echo 'export DEV_BACKUP_DIR' >> /etc/profile.d/developer.sh"
+#    sudo bash -c "chmod 644 /etc/profile.d/developer.sh"
+#
+#  - Set GIT_USER local variable
+
 APP_NAME=PyNetConf
 APP_VERSION=1.0
 APP_DIR=${APP_NAME}-${APP_VERSION}
-BACKUP_DIR=~/dev/backup
-BACKUP_FILE=$(BACKUP_DIR)/$(APP_NAME).$(APP_VERSION).backup.`date '+%Y%m%d.%H%M%S'`.tar.gz
-GIT_USER=greenpau
+DEV_BACKUP_FILE=$(DEV_BACKUP_DIR)/$(APP_NAME).$(APP_VERSION).backup.`date '+%Y%m%d.%H%M%S'`.tar.gz
+GIT_USER=$(USER)
 
 all:
 	@echo "Running full deployment ..."
@@ -26,9 +35,9 @@ clean:
 
 backup:
 	@echo "Backup ..."
-	@mkdir -p ${BACKUP_DIR}
-	@cd ..; tar -cvzf $(BACKUP_FILE) --exclude='*/.git*' ${APP_NAME}; cd ${APP_NAME}
-	@echo "Completed! Run \"tar -ztvf $(BACKUP_FILE)\" to verify ..."
+	@mkdir -p ${DEV_BACKUP_DIR}
+	@cd ..; tar -cvzf ${DEV_BACKUP_FILE} --exclude='*/.git*' ${APP_NAME}; cd ${APP_NAME}
+	@echo "Completed! Run \"tar -ztvf ${DEV_BACKUP_FILE}\" to verify ..."
 
 git:
 	@echo "Running git commit ..."
