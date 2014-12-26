@@ -3,7 +3,6 @@ README.netconf.dev
 README.git.dev
 MANIFEST
 dist/
-tests/test.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
