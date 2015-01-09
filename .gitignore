@@ -3,7 +3,6 @@ README.netconf.dev
 README.git.dev
 MANIFEST
 dist/
-pynetconf/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
