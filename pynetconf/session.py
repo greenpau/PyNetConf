@@ -24,51 +24,13 @@ import pprint;
 import base64;
 from lxml import etree;
 import paramiko;
+import logging;
 
 class NetConfSession:
     ''' Represents NETCONF Session '''
 
-    def _exit(self, lvl=0):
-        if self.verbose > 0:
-            if self.log:
-                print('\n'.join(self.log));
-        else:
-            if self.err:
-                print('\n'.join(self.err));
-        if lvl == 1:
-            exit(1);
-        else:
-            exit(0);
-
-
-    def _log(self, msg='TEST', lvl='INFO'):
-        ''' Logging '''
-        if self.verbose < 1 and lvl == 'INFO':
-            return;
-        lvls={'DEBUG': 5, 'CRIT': 4, 'ERROR': 3, 'WARN': 2, 'INFO': 1};
-        cls = str(type(self).__name__);
-        func = str(sys._getframe(1).f_code.co_name);
-        ts = str(datetime.datetime.now());
-        for xmsg in msg.split('\n'):
-            if self.error is not True and lvls[lvl] in [3, 4]:
-                self.error = True;
-            self._log_id += 1;
-            self.log[self._log_id] = {'ts': ts, 'function': __file__.split('/')[-1] + '->' + cls + '.' + func + '()', 'level': lvl, 'text': xmsg};
-        return;
-
-
     def show(self, t=None, p=None):
-        ''' Display information '''
-        if t == 'log':
-            ''' Display log buffer '''
-            for x in self.log:
-                if p == 'error' and self.log[x][level] not in ['CRIT', 'ERROR']:
-                    continue;
-                print("{0:26s} | {1:s} | {2:s} | {3:s}".format(self.log[x]['ts'], 
-                                                               self.log[x]['function'], 
-                                                               self.log[x]['level'],
-                                                               self.log[x]['text']));
-        elif t == 'capabilities':
+        if t == 'capabilities':
             ''' Display client or server NETCONF capabilities from hello message exchange'''
             if p == 'client':
                 pass;
@@ -78,38 +40,37 @@ class NetConfSession:
                 pass;
         else:
             pass;
-        self.log.clear();
         return;
 
     def _nc_xml_valid(self, p=None, s=None):
         v = False;
-        self._log('Validating XML for session-id ' + str(self.sid) + ' ...', 'INFO');
+        self.logger.info('Validating XML for session-id ' + str(self.sid) + ' ...');
         if s is None:
             s = 'xml/netconf.xsd';
         if not isinstance(p, bytes):
             p = bytes(p, 'utf-8');
         try:
             xsd = os.path.join('/'.join(os.path.abspath(__file__).split('/')[:-1]), s);
-            self._log('against ' + xsd + ' ...', 'INFO');
+            self.logger.info('against ' + xsd + ' ...');
             x = etree.XMLSchema(file=xsd);
         except Exception as err:
-            self._log(str(err), 'ERROR');
-            self._log(str(traceback.format_exc()), 'ERROR');
-        self._log('using validate() ...', 'INFO');
+            self.logger.error(str(err));
+            self.logger.error(str(traceback.format_exc()));
+        self.logger.info('using validate() ...');
         try:
             x.validate(etree.fromstring(p));
             v = True;
         except Exception as err:
-            self._log(str(err), 'ERROR');
-            self._log(str(traceback.format_exc()), 'ERROR');
+            self.logger.error(str(err));
+            self.logger.error(str(traceback.format_exc()));
             v = False;
-        self._log('using assertValid() ...', 'INFO');
+        self.logger.info('using assertValid() ...');
         try:
             x.assertValid(etree.fromstring(p));
             v = True;
         except Exception as err:
-            self._log(str(err), 'ERROR');
-            self._log(str(traceback.format_exc()), 'ERROR');
+            self.logger.error(str(err));
+            self.logger.error(str(traceback.format_exc()));
             v = False;
         return v;
         
@@ -118,7 +79,7 @@ class NetConfSession:
         return str(self.sid);
 
     def _nc_xml_build(self, t, p1=None, p2=None):
-        self._log('Building ' + t + ' ...', 'INFO');
+        self.logger.info('Building ' + t + ' ...');
         if t == 'hello':
             HELLO = etree.Element('hello');
             HELLO.attrib['xmlns'] = 'urn:ietf:params:xml:ns:netconf:base:1.0';
@@ -132,22 +93,22 @@ class NetConfSession:
             xb = b'<?xml version="1.0" encoding="utf-8"?>\n' + etree.tostring(HELLO, pretty_print=True);
             xa = xb.decode("utf-8");
             if self._nc_xml_valid(xa) == False:
-                self._log('failed netconf xml schema validation for ' + t + ' ...', 'ERROR');
-        self._log('Building ' + t + ' ... done', 'INFO');
+                self.logger.error('failed netconf xml schema validation for ' + t + ' ...');
+        self.logger.info('Building ' + t + ' ... done');
         return xa;
 
 
     def connect(self):
         ''' Initialize SSH Session and exchange hello messages '''
-        self._log('Connecting ...', 'INFO');
+        self.logger.info('Connecting ...');
         x = self._nc_xml_build('hello');
-        print(str(x));
-
+        self.logger.info('Sending client hello message:');
+        self.logger.info(str(x));
         return;
 
     def cmd(self, cmd=None):
         ''' Craft XML payload, send it, and parse XML response '''
-        self._log('Executing ' + str(cmd) + ' ...', 'INFO');
+        self.logger.info('Executing ' + str(cmd) + ' ...');
         return;
 
 
@@ -163,11 +124,18 @@ class NetConfSession:
 
     def __init__(self, host=None, user=None, password=None, port=830, check_fingerprint=False, verbose=0):
         ''' Initialize NETCONF Session '''
+        logging.basicConfig(format='%(asctime)s - %(name)s - %(funcName)s() - %(levelname)s - %(message)s');
+        self.logger = logging.getLogger(__name__);
 
-        self.verbose = verbose;
+        if verbose == 1:
+            self.logger.setLevel(logging.WARN);
+        elif verbose == 2:
+            self.logger.setLevel(logging.INFO);
+        elif verbose == 3:
+            self.logger.setLevel(logging.DEBUG);
+        else:
+            self.logger.setLevel(logging.ERROR);
 
-        self.log = {};
-        self._log_id = 0;
         self.sid = 0;
         self.error = False;
         self.resp = None;
@@ -179,24 +147,28 @@ class NetConfSession:
             else:
                 self.host = host;
         else:
-            self._log('expects host parameter to be a string', 'ERROR');
-            self._exit(1);
+            self.logger.error('expects host parameter to be a string');
+            self.error = True;
+            return;
 
         if isinstance(port, int):
             if port in range(1, 65535):
                 self.port = port;
             else:
-                self._log('expects TCP port parameter value to be between 1 and 65535', 'ERROR');
-                self._exit(1);
+                self.logger.error('expects TCP port parameter value to be between 1 and 65535');
+                self.error = True;
+                return;
         else:
-            self._log('expects TCP port parameter to be an integer', 'ERROR');
-            self._exit(1);        
+            self.logger.error('expects TCP port parameter to be an integer');
+            self.error = True;
+            return;
 
         if isinstance(user, str):
             self.username = user;
         else:
-            self._log('expects user parameter to be a string', 'ERROR');
-            self._exit(1);
+            self.logger.error('expects user parameter to be a string');
+            self.error = True;
+            return;
 
         self.check_fingerprint = check_fingerprint;
 
@@ -209,19 +181,19 @@ class NetConfSession:
             self.auth='publickey';
             self.password='publickey';
         else:
-            self._log('invalid authentication method ' + str(type(password)), 'ERROR');
-            self._exit(1);
+            self.logger.error('invalid authentication method ' + str(type(password)));
+            self.error = True;
+            return;
 
-        if self.verbose > 0:
-            self._log('Log Level = ' + str(self.verbose), 'INFO');
-            self._log('Host = ' + self.host, 'INFO');
-            self._log('TCP Port = ' + str(self.port), 'INFO');
-            self._log('Username = ' + self.username, 'INFO');
-            self._log('Authentication Method = ' + self.auth, 'INFO');
-            if self.auth == 'password':
-                self._log('SSH Password = ' + str(self.password), 'INFO');
-            else:
-                self._log('SSH Private Key = ' + str(self.password), 'INFO'); 
+        self.logger.info('Log Level = ' + str(verbose));
+        self.logger.info('Host = ' + self.host);
+        self.logger.info('TCP Port = ' + str(self.port));
+        self.logger.info('Username = ' + self.username);
+        self.logger.info('Authentication Method = ' + self.auth);
+        if self.auth == 'password':
+            self.logger.info('SSH Password = ' + str(self.password));
+        else:
+            self.logger.info('SSH Private Key = ' + str(self.password)); 
             
         return;
 

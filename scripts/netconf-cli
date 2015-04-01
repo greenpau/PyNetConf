@@ -19,17 +19,21 @@ import argparse;
 import pprint;
 import datetime;
 import traceback;
+import logging;
+
+logging.basicConfig(format='%(asctime)s - %(name)s - %(funcName)s() - %(levelname)s - %(message)s');
+logger = logging.getLogger(__file__);
+logger.setLevel(logging.DEBUG);
 
 try:
     from pynetconf import NetConfSession;
 except Exception as err:
     for e in err.args:
-        print('%-26s | %s | %s | %s' % (str(datetime.datetime.now()), 
-              __file__.split('/')[-1] + '->global()', str(type(err).__name__), str(e)));
+        logger.error(str(type(err).__name__) + ': ' + str(e));
     sys.exit(1);
 
-
 def main():
+    global logger;
     func = 'main()';
     descr = 'PyNetConf - IETF Network Configuration Protocol Client Library\n\n';
     descr += 'examples:\n \n';
@@ -59,24 +63,29 @@ def main():
     auth_group.add_argument('--check-fingerprint', dest='ifc', action='store_true', 
                             help='enable SSH fingerprint check');
     parser.add_argument('-l', '--log-level', dest='ilog', metavar='LEVEL', type=int, 
-                        default=0, choices=range(1, 6), help='log level (default: 0)');
+                        default=0, choices=range(1, 4), help='log level (default: 0)');
     args = parser.parse_args();
+ 
+    if args.ilog == 1:
+        logger.setLevel(logging.WARN);
+    elif args.ilog == 2:
+        logger.setLevel(logging.INFO);
+    elif args.ilog == 3:
+        logger.setLevel(logging.DEBUG);
+    else:
+        logger.setLevel(logging.ERROR);
 
+    logger.info('xyz');
     try:
         nc = NetConfSession(args.ihost, args.iuser, args.ipass, args.iport, args.ifc, args.ilog);
         if nc.error:
-            nc.show('log');
-            raise RuntimeError('local issue');
-        else:
-            if args.ilog > 0 and len(nc.log) > 0:
-                nc.show('log');
+            logger.error('failed to prepare for a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
+            sys.exit(1);
         nc.connect();
         if nc.error:
-            nc.show('log');
-            raise RuntimeError('connectivity issue');
-        else:
-            if args.ilog > 0 and len(nc.log) > 0:
-                nc.show('log');
+            logger.error('failed to establish a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
+            sys.exit(1);
+        logger.info('connected to ' + args.ihost + ' over TCP port ' + str(args.iport) + ' for a NETCONF session');
 
         ''' display client and server capabilities '''
         nc.show('capabilities', 'client');  # alternatively, pprint.pprint(nc.capabilities['client']);
@@ -85,23 +94,23 @@ def main():
         for c in args.icmd:            
             nc.cmd(c);
             if nc.error:
-                nc.show('log');
-                raise RuntimeError('command request-response issues');
-            if nc.resp:
-                nc.show('response');
-            if args.ilog > 0 and len(nc.log) > 0:
-                nc.show('log');
+                logger.error('failed to execute "' + c +'" command on ' + args.ihost);
+                sys.exit(1);
+            logger.info(str(nc.resp));
+
         nc.close();
+        if nc.error:
+            logger.error('failed to graceful disconnect a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
+            sys.exit(1);
 
     except Exception as err:
         for e in err.args:
-            print('%-26s | %s | %s | %s' % (str(datetime.datetime.now()), 
-                  __file__.split('/')[-1] + '->' + func, str(type(err).__name__), str(e)));
-        if args.ilog == 5:
-            for i in str(traceback.format_exc()).splitlines():
-                print('%-26s | %s | %s ' % (str(datetime.datetime.now()), 
-                      __file__.split('/')[-1] + '->' + func, i));
+            logger.error(str(type(err).__name__) + ': ' + str(e));
+        for i in str(traceback.format_exc()).splitlines():
+            logger.error(str(type(err).__name__) + ': ' + str(i));
         return;
+    
+    sys.exit(0);
 
 if __name__ == '__main__':
     main();
