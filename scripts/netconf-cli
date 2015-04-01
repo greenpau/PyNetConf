@@ -37,7 +37,7 @@ def main():
     func = 'main()';
     descr = 'PyNetConf - IETF Network Configuration Protocol Client Library\n\n';
     descr += 'examples:\n \n';
-    descr += '  python3 ' + str(__file__) + ' -ho router -u admin -p cisco -c "show interfaces" -l 5\n \n';
+    descr += '  python3 ' + str(__file__) + ' -ho router -P 22 -u admin -p cisco -c "show run" -l 3\n \n';
     descr += '  python3 ' + str(__file__) + ' -ho router -u admin -k ~/.ssh/id_rsa \\\n';
     descr += '    --cmd "show interfaces" --cmd "show version" -l 5\n \n';
     descr += '  python3 ' + str(__file__) + ' --help';
@@ -47,7 +47,7 @@ def main():
     conn_group = parser.add_argument_group('network connectivity arguments');
     conn_group.add_argument('-ho', '--host', dest='ihost', metavar='HOST', 
                             type=str, required=True, help='host IP or DNS Name');
-    conn_group.add_argument('-po', '--port', dest='iport', metavar='PORT', 
+    conn_group.add_argument('-P', '--port', dest='iport', metavar='PORT', 
                             type=int, default=830, help='tcp port (default: 830)');
     auth_group = parser.add_argument_group('authentication arguments')
     auth_group.add_argument('-u', '--user', dest='iuser', metavar='USERNAME', 
@@ -75,8 +75,8 @@ def main():
     else:
         logger.setLevel(logging.ERROR);
 
-    logger.info('xyz');
     try:
+        logger.info('building a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport) + ' ...');
         nc = NetConfSession(args.ihost, args.iuser, args.ipass, args.iport, args.ifc, args.ilog);
         if nc.error:
             logger.error('failed to prepare for a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
