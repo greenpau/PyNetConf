@@ -44,6 +44,16 @@ class NetConfSession:
             pass;
         return;
 
+    def _nc_resp_to_xml(self, s):
+        try:
+            #s = s.replace('<?xml version="1.0" encoding="utf-8"?>\r\n', '');
+            #s = s.replace('<?xml version="1.0" encoding="utf-8"?>', '');
+            sx = etree.fromstring(s);
+            sa = etree.tostring(sx, pretty_print=True).decode("utf-8");
+            return sa;
+        except:
+            return s;
+
     def _nc_xml_valid(self, p=None, s=None):
         v = False;
         self.logger.info('Validating XML for session-id ' + str(self.sid) + ' ...');
@@ -84,17 +94,27 @@ class NetConfSession:
         self.logger.info('Building ' + t + ' ...');
         xb = None;
         xa = None;
-        if t == 'client_hello':
-            HELLO = etree.Element('hello');
-            HELLO.attrib['xmlns'] = 'urn:ietf:params:xml:ns:netconf:base:1.0';
-            CAPS = etree.SubElement(HELLO, 'capabilities');
-            CAPS_1 = etree.SubElement(CAPS, 'capability');
-            CAPS_1.text = 'urn:ietf:params:netconf:base:1.1';
-            CAPS_2 = etree.SubElement(CAPS, 'capability');
-            CAPS_2.text = 'urn:ietf:params:netconf:capability:startup:1.0';
-            #SESSION_ID = etree.SubElement(HELLO, 'session-id');
-            #SESSION_ID.text = self._nc_session_id();
-            xb = b'<?xml version="1.0" encoding="utf-8"?>\n' + etree.tostring(HELLO, pretty_print=True);
+        NC_NS = 'urn:ietf:params:xml:ns:netconf:base:1.0';
+        if t == 'client-hello':
+            ROOT = None;
+            if self.host_type in ['nxos3000']:
+                ROOT = etree.Element('{' + NC_NS + '}hello', nsmap={'nc': NC_NS});
+                CAPS = etree.SubElement(ROOT, '{'+ NC_NS + '}capabilities');
+                CAPS_1 = etree.SubElement(CAPS, '{'+ NC_NS + '}capability');
+                CAPS_1.text = 'urn:ietf:params:netconf:base:1.1';
+                CAPS_2 = etree.SubElement(CAPS, '{'+ NC_NS + '}capability');
+                CAPS_2.text = 'urn:ietf:params:netconf:capability:startup:1.0';
+            else:
+                ROOT = etree.Element('hello');
+                CAPS = etree.SubElement(ROOT, 'capabilities');
+                CAPS_1 = etree.SubElement(CAPS, 'capability');
+                CAPS_1.text = 'urn:ietf:params:netconf:base:1.1';
+                CAPS_2 = etree.SubElement(CAPS, 'capability');
+                CAPS_2.text = 'urn:ietf:params:netconf:capability:startup:1.0';
+            if self.host_type not in ['nxos3000']:
+                SESSION_ID = etree.SubElement(ROOT, 'session-id');
+                SESSION_ID.text = self._nc_session_id();
+            xb = b'<?xml version="1.0" encoding="utf-8"?>\n' + etree.tostring(ROOT, pretty_print=True);
         elif t == 'close-session':
             ROOT = etree.Element('rpc');
             ROOT.attrib['message-id'] = self._nc_session_id();
@@ -102,18 +122,32 @@ class NetConfSession:
             CLOSE_SESSION = etree.SubElement(ROOT, 'close-session');
             xb = b'<?xml version="1.0" encoding="utf-8"?>\n' + etree.tostring(ROOT, pretty_print=True);
         elif t == 'get-config':
-            ROOT = etree.Element('rpc');
-            ROOT.attrib['message-id'] = self._nc_session_id();
-            ROOT.attrib['xmlns'] = 'urn:ietf:params:xml:ns:netconf:base:1.0';
-            ROOT.attrib['xmlns'] = 'http://www.cisco.com/nxos:1.0:nfcli';
-            GET_CONFIG = etree.SubElement(ROOT, 'get-config');
-            GET_CONFIG_SOURCE = etree.SubElement(GET_CONFIG, 'source');
-            if p1 == 'running':
-                etree.SubElement(GET_CONFIG_SOURCE, 'running');
-            if p2 == 'interfaces':
-                GET_CONFIG_FILTER = etree.SubElement(GET_CONFIG, 'filter');
-                GET_CONFIG_FILTER_CONFIG = etree.SubElement(GET_CONFIG_FILTER, 'Configuration');
-                etree.SubElement(GET_CONFIG_FILTER_CONFIG, 'InterfaceConfigurationTable');
+            ROOT = None;
+            if self.host_type in ['nxos3000']:
+                ROOT = etree.Element('{' + NC_NS + '}rpc', nsmap={'nc': NC_NS});
+                ROOT.attrib['message-id'] = self._nc_session_id();
+                ROOT.attrib['xmlns'] = 'http://www.cisco.com/nxos:1.0:nfcli';
+                GET_CONFIG = etree.SubElement(ROOT, '{'+ NC_NS + '}get-config');
+                GET_CONFIG_SOURCE = etree.SubElement(GET_CONFIG, '{'+ NC_NS + '}source');
+                if p1 == 'running':
+                    etree.SubElement(GET_CONFIG_SOURCE, '{'+ NC_NS + '}running');
+                #if p2 == 'interfaces':
+                #    GET_CONFIG_FILTER = etree.SubElement(GET_CONFIG, 'filter');
+                #    GET_CONFIG_FILTER_CONFIG = etree.SubElement(GET_CONFIG_FILTER, 'Configuration');
+                #    etree.SubElement(GET_CONFIG_FILTER_CONFIG, 'InterfaceConfigurationTable');
+            else:
+                ROOT = etree.Element('rpc');
+                ROOT.attrib['message-id'] = self._nc_session_id();
+                ROOT.attrib['xmlns'] = 'urn:ietf:params:xml:ns:netconf:base:1.0';
+                ROOT.attrib['xmlns'] = 'http://www.cisco.com/nxos:1.0:nfcli';
+                GET_CONFIG = etree.SubElement(ROOT, 'get-config');
+                GET_CONFIG_SOURCE = etree.SubElement(GET_CONFIG, 'source');
+                if p1 == 'running':
+                    etree.SubElement(GET_CONFIG_SOURCE, 'running');
+                if p2 == 'interfaces':
+                    GET_CONFIG_FILTER = etree.SubElement(GET_CONFIG, 'filter');
+                    GET_CONFIG_FILTER_CONFIG = etree.SubElement(GET_CONFIG_FILTER, 'Configuration');
+                    etree.SubElement(GET_CONFIG_FILTER_CONFIG, 'InterfaceConfigurationTable');
             xb = b'<?xml version="1.0" encoding="utf-8"?>\n' + etree.tostring(ROOT, pretty_print=True);
         else:
             self.logger.error('unrecognized netconf type => ' + t);
@@ -126,100 +160,68 @@ class NetConfSession:
         return xa + ']]>]]>';
 
 
-    def connect(self):
-        ''' Exchange hello messages '''
+    def rpc(self, cmds=[]):
+        ''' Communicate RPC messages over NETCONF Session '''
 
-        client_hello = self._nc_xml_build('client_hello');
+        self.logger.info('RPC Request: ' + '/'.join(cmds) + ' ...');
+
+        rpc_msg = None;
+        rpc_req = None;
+
+        self.logger.info('length: ' + str(len(cmds)))
+
+        if len(cmds) == 3:
+            rpc_msg = cmds[0];
+            rpc_req = self._nc_xml_build(rpc_msg, cmds[1], cmds[2]); 
+        elif len(cmds) == 2:
+            rpc_msg = cmds[0];
+            rpc_req = self._nc_xml_build(rpc_msg, cmds[1]); 
+        else:
+            rpc_msg = cmds[0];
+            rpc_req = self._nc_xml_build(rpc_msg);
 
         try:
-            self.logger.info('receiving server hello message ...');
+            if rpc_msg not in ['client-hello']:
+                self.logger.info('sending ' + rpc_msg + ' RPC message:\n' + str(rpc_req));
+                while not self.nc_chan.send_ready():
+                    self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
+                    time.sleep(2);
+                rc = self.nc_chan.send(rpc_req);
+                if rc == 0:
+                    self.logger.error('failed to send rpc ' + rpc_msg + ' message, because the channel stream is closes ...');
+                    self.error = True;
+                    return;
+                else:
+                    self.logger.info('the rpc ' + rpc_msg + ' message (' + str(rc) + ') was sent successfully ...');
+            
+            if rpc_msg in ['client-hello']:
+                self.logger.info('receiving server-hello RPC message ...');
+            else:
+                self.logger.info('receiving response to ' + rpc_msg + ' RPC message ...');
             while not self.nc_chan.recv_ready():
                 self.logger.info(self.host +  ' is not ready to receive data via this NETCONF channel, waiting ... ');
                 time.sleep(2);
-            server_hello = self.nc_chan.recv(65536);
-            self.logger.info('received server hello message:\n' + str(server_hello));
+            close_session_resp = self.nc_chan.recv(65536);
+            self.logger.info('received response:\n' + self._nc_resp_to_xml(close_session_resp.decode("utf-8")));
 
-
-            self.logger.info('sending client hello message:\n' + str(client_hello));
-            while not self.nc_chan.send_ready():
-                self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
-                time.sleep(2);
-            self.nc_chan.send(client_hello);
-            self.logger.info('completed sending client hello message ...');
-
-        except Exception as err:
-            self.logger.error(str(err));
-            self.logger.error(str(traceback.format_exc()));
-            self.error = True;
-
-        return;
-
-
-    def cmd(self, cmd=None):
-        ''' Craft XML payload, send it, and parse XML response '''
-        self.logger.info('Executing ' + str(cmd) + ' ...');
-
-        rpc_req = self._nc_xml_build('get-config', 'running', 'interfaces');
-
-        try:
-            self.logger.info('sending rpc message:\n' + str(rpc_req));
-            while not self.nc_chan.send_ready():
-                self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
-                time.sleep(2);
-            self.nc_chan.send(rpc_req);
-            self.logger.info('completed sending rpc message ...');
-
-            self.logger.info('receiving response ...');
-            while not self.nc_chan.recv_ready():
-                self.logger.info(self.host +  ' is not ready to receive data via this NETCONF channel, waiting ... ');
-                time.sleep(2);
-
-            rpc_resp = self.nc_chan.recv(65536);
-
-            self.logger.info('received response:\n' + str(rpc_resp));
+            if rpc_msg in ['client-hello']:
+                self.logger.info('sending ' + rpc_msg + ' RPC message:\n' + str(rpc_req));
+                while not self.nc_chan.send_ready():
+                    self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
+                    time.sleep(2);
+                rc = self.nc_chan.send(rpc_req);
+                if rc == 0:
+                    self.logger.error('failed to send rpc ' + rpc_msg + ' message, because the channel stream is closes ...');
+                    self.error = True;
+                    return;
+                else:
+                    self.logger.info('the rpc ' + rpc_msg + ' message (' + str(rc) + ') was sent successfully ...');
 
         except Exception as err:
             self.logger.error(str(err));
             self.logger.error(str(traceback.format_exc()));
             self.error = True;
 
-        return;
-
-
-    def close(self):
-        ''' Terminate NETCONF Session via close-session operation '''
-
-        close_session_req = self._nc_xml_build('close-session');
-
-        try:
-            self.logger.info('sending close-session message:\n' + str(close_session_req));
-            while not self.nc_chan.send_ready():
-                self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
-                time.sleep(2);
-            self.nc_chan.send(close_session_req);
-            self.logger.info('completed sending close-session message ...');
-
-#            ....#
-#
-#            self.logger.info('receiving response ...');
-#            while not self.nc_chan.recv_ready():
-#                self.logger.info(self.host +  ' is not ready to receive data via this NETCONF channel, waiting ... ');
-#                time.sleep(2);
-
-#            close_session_resp = self.nc_chan.recv(65536);
-
-#            self.logger.info('received response:\n' + str(close_session_resp));
-
-        except Exception as err:
-            self.logger.error(str(err));
-            self.logger.error(str(traceback.format_exc()));
-            self.error = True;
-
-        return;
-
-
-    def kill(self):
-        ''' Terminate NETCONF Session via kill-session operation '''
         return;
 
 
@@ -264,8 +266,7 @@ class NetConfSession:
         else:
             self.logger.error('expects host type parameter to be a string');
             self.error = True;
-            return;
-        
+            return;        
 
         if isinstance(port, int):
             if port in range(1, 65535):
@@ -308,10 +309,12 @@ class NetConfSession:
         self.logger.info('Username     => ' + self.username);
         self.logger.info('Auth Method  => ' + self.auth);
         if self.auth == 'password':
-            self.logger.info('SSH Password => ' + str(self.password));
+            self.logger.info('SSH Password => **********');
+            #self.logger.info('SSH Password => ' + str(self.password));
         else:
-            self.logger.info('SSH PrivKey  => ' + str(self.password)); 
+            self.logger.info('SSH PrivKey  => **********'); 
 
+        #rpc_msg = self._nc_xml_build('client-hello');
         #rpc_msg = self._nc_xml_build('get-config', 'running', 'interfaces');
         #print(rpc_msg);
         #sys.exit(1)

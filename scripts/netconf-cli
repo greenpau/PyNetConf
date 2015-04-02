@@ -131,7 +131,7 @@ def main():
             logger.error('failed to prepare for a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);
 
-        nc.connect();
+        nc.rpc(['client-hello']);
         if nc.error:
             logger.error('failed to establish a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);
@@ -142,12 +142,18 @@ def main():
         #nc.show('capabilities', 'client');  # alternatively, pprint.pprint(nc.capabilities['client']);
         #nc.show('capabilities', 'server');  # alternatively, pprint.pprint(nc.capabilities['server']);
 
-        for c in args.icmd:            
-            nc.cmd(c);
-            if nc.error:
-                logger.error('failed to execute "' + c +'" command on ' + args.ihost);
+        #for c in args.icmd:            
+        #    nc.cmd(c);
+        #    if nc.error:
+        #        logger.error('failed to execute "' + c +'" command on ' + args.ihost);
 
-        nc.close();
+
+        nc.rpc(['get-config', 'running', 'interfaces']);
+        if nc.error:
+            logger.error('failed to get interface configuration from running config via a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
+            sys.exit(1);
+
+        nc.rpc(['close-session']);
         if nc.error:
             logger.error('failed to graceful disconnect a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);
