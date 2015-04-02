@@ -9,6 +9,7 @@
 #------------------------------------------------------------------------------------------#
 
 import os;
+import stat;
 import sys;
 if sys.version_info[0] < 3:
     sys.stderr.write(os.path.basename(__file__) + ' requires Python 3 or higher.\n');
@@ -20,6 +21,7 @@ import pprint;
 import datetime;
 import traceback;
 import logging;
+import configparser;
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(funcName)s() - %(levelname)s - %(message)s');
 logger = logging.getLogger(__file__);
@@ -31,6 +33,41 @@ except Exception as err:
     for e in err.args:
         logger.error(str(type(err).__name__) + ': ' + str(e));
     sys.exit(1);
+
+def _load_credentials(h):
+
+    logger.info('checking for local credentials ...');
+
+    f = os.path.join(os.environ['HOME'], '.netconf.rc');
+    if not os.path.exists(f):
+        logger.error('credentials file ' + f + ' does not exist, exiting ...');
+        sys.exit(1);
+    if not os.path.isfile(f):
+        logger.error('credentials file ' + f + ' is not a file, exiting ...');
+        sys.exit(1);
+    if not os.access(f, os.R_OK):
+        logger.error('credentials file ' + f + ' is not readable, exiting ...');
+        sys.exit(1);
+
+    print( oct(stat.S_IMODE(os.stat(f).st_mode)))
+    if not oct(stat.S_IMODE(os.stat(f).st_mode)) == '0o600':
+        logger.error('credentials file ' + f + ' is not secure!');
+        logger.error('try running "chmod 600 ' + f + '" to secure it, exiting ...');
+        sys.exit(1);
+
+    c = configparser.ConfigParser();
+    c.read(f);
+    if 'DEFAULT' not in c:
+        logger.error('credentials file is missing DEFAULT section, exiting ...');
+        sys.exit(1);
+    if 'username' not in c['DEFAULT']:
+        logger.error('credentials file is missing "username" key in DEFAULT section, exiting ...');
+        sys.exit(1);
+    if 'password' not in c['DEFAULT'] and 'private_rsa_key' not in c['DEFAULT']:
+        logger.error('credentials file is missing either "password" or "private_rsa_key" key in DEFAULT section, exiting ...');
+        sys.exit(1);
+
+    return(c['DEFAULT']['username'], c['DEFAULT']['password']);
 
 def main():
     global logger;
@@ -48,11 +85,11 @@ def main():
     conn_group.add_argument('-ho', '--host', dest='ihost', metavar='HOST', 
                             type=str, required=True, help='host IP or DNS Name');
     conn_group.add_argument('-P', '--port', dest='iport', metavar='PORT', 
-                            type=int, default=830, help='tcp port (default: 830)');
+                            type=int, default=22, help='tcp port (default: 22)');
     auth_group = parser.add_argument_group('authentication arguments')
     auth_group.add_argument('-u', '--user', dest='iuser', metavar='USERNAME', 
-                            type=str, required=True, help='username');
-    credgroup = auth_group.add_mutually_exclusive_group(required=True);
+                            type=str, help='username');
+    credgroup = auth_group.add_mutually_exclusive_group();
     credgroup.add_argument('-p', '--pass', dest='ipass', metavar='PASSWORD', 
                            type=str, help='password');
     credgroup.add_argument('-k', '--key', dest='ipass', metavar='SSH_KEY_FILE_PATH', 
@@ -75,9 +112,15 @@ def main():
     else:
         logger.setLevel(logging.ERROR);
 
+    if args.iuser and args.ipass:
+        iuser = args.iuser;
+        ipass = args.ipass;
+    else:
+        iuser, ipass = _load_credentials(args.ihost);
+
     try:
         logger.info('building a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport) + ' ...');
-        nc = NetConfSession(args.ihost, args.iuser, args.ipass, args.iport, args.ifc, args.ilog);
+        nc = NetConfSession(args.ihost, iuser, ipass, args.iport, args.ifc, args.ilog);
         if nc.error:
             logger.error('failed to prepare for a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);

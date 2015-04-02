@@ -25,6 +25,8 @@ import base64;
 from lxml import etree;
 import paramiko;
 import logging;
+import socket;
+import time;
 
 class NetConfSession:
     ''' Represents NETCONF Session '''
@@ -101,9 +103,33 @@ class NetConfSession:
     def connect(self):
         ''' Initialize SSH Session and exchange hello messages '''
         self.logger.info('Connecting ...');
-        x = self._nc_xml_build('hello');
-        self.logger.info('Sending client hello message:');
-        self.logger.info(str(x));
+        client_hello = self._nc_xml_build('hello');
+        self.logger.info('Sending client hello message:\n' + str(client_hello));
+
+        try:
+            while not self.nc_chan.send_ready():
+                self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
+                time.sleep(2);
+            self.nc_chan.send(client_hello);
+
+            while not self.nc_chan.recv_ready():
+                self.logger.info(self.host +  ' is not ready to receive data via this NETCONF channel, waiting ... ');
+                time.sleep(2);
+
+            data = self.nc_chan.recv(65536);
+
+            self.logger.info('received: ' + str(data));
+
+            pass;
+            #self.nc_chan.send(client_hello);
+            #while not self.nc_chan.recv_ready():
+            #    logger.info("NETCONF channel is not ready ... ")
+            #    time.sleep(2);
+
+        except Exception as err:
+            self.logger.error(str(err));
+            self.logger.error(str(traceback.format_exc()));
+
         return;
 
     def cmd(self, cmd=None):
@@ -194,6 +220,16 @@ class NetConfSession:
             self.logger.info('SSH Password = ' + str(self.password));
         else:
             self.logger.info('SSH Private Key = ' + str(self.password)); 
+
+        try:
+            self.nc_sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM);
+            self.nc_sock.connect((self.host, self.port));
+            self.nc_trans = paramiko.Transport(self.nc_sock);
+            self.nc_trans.connect(username=self.username, password=self.password);
+            self.nc_chan = self.nc_trans.open_session();
+            self.nc_chan.invoke_subsystem('xmlagent');
+        except Exception as err:
+            self.logger.error(str(err));
+            self.logger.error(str(traceback.format_exc()));
             
         return;
-
