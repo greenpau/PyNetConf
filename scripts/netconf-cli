@@ -27,6 +27,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(funcName)s() - %(levelnam
 logger = logging.getLogger(__file__);
 logger.setLevel(logging.DEBUG);
 
+
 try:
     from pynetconf import NetConfSession;
 except Exception as err:
