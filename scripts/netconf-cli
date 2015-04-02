@@ -83,6 +83,9 @@ def main():
     conn_group = parser.add_argument_group('network connectivity arguments');
     conn_group.add_argument('-ho', '--host', dest='ihost', metavar='HOST', 
                             type=str, required=True, help='host IP or DNS Name');
+    conn_group.add_argument('-t', '--type', dest='itype', metavar='TYPE', 
+                            type=str, default='nxos3000', choices=['nxos3000'], required=True, 
+                            help='host typehost IP or DNS Name');
     conn_group.add_argument('-P', '--port', dest='iport', metavar='PORT', 
                             type=int, default=22, help='tcp port (default: 22)');
     auth_group = parser.add_argument_group('authentication arguments')
@@ -123,7 +126,7 @@ def main():
 
         logger.info('building a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport) + ' ...');
 
-        nc = NetConfSession(args.ihost, iuser, ipass, args.iport, args.ifc, args.ilog, args.vxml);
+        nc = NetConfSession(args.ihost, args.itype, iuser, ipass, args.iport, args.ifc, args.ilog, args.vxml);
         if nc.error:
             logger.error('failed to prepare for a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);

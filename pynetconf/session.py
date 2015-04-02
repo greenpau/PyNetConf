@@ -223,7 +223,8 @@ class NetConfSession:
         return;
 
 
-    def __init__(self, host=None, user=None, password=None, port=830, check_fingerprint=False, verbose=0, xml_validation=False):
+    def __init__(self, host=None, host_type=None, user=None, password=None, port=830, 
+                 check_fingerprint=False, verbose=0, xml_validation=False):
         ''' Initialize NETCONF Session '''
         logging.basicConfig(format='%(asctime)s - %(name)s - %(funcName)s() - %(levelname)s - %(message)s');
         self.logger = logging.getLogger(__name__);
@@ -252,6 +253,19 @@ class NetConfSession:
             self.logger.error('expects host parameter to be a string');
             self.error = True;
             return;
+
+        if isinstance(host_type, str):
+            if host_type in ['nxos3000']:
+                self.host_type = host_type;
+            else:
+                self.logger.error('the only supported type(s): nxos3000');
+                self.error = True;
+                return;
+        else:
+            self.logger.error('expects host type parameter to be a string');
+            self.error = True;
+            return;
+        
 
         if isinstance(port, int):
             if port in range(1, 65535):
@@ -287,15 +301,16 @@ class NetConfSession:
             self.error = True;
             return;
 
-        self.logger.info('Log Level = ' + str(verbose));
-        self.logger.info('Host = ' + self.host);
-        self.logger.info('TCP Port = ' + str(self.port));
-        self.logger.info('Username = ' + self.username);
-        self.logger.info('Authentication Method = ' + self.auth);
+        self.logger.info('Log Level    => ' + str(verbose));
+        self.logger.info('Host         => ' + self.host);
+        self.logger.info('Type         => ' + self.host_type);
+        self.logger.info('TCP Port     => ' + str(self.port));
+        self.logger.info('Username     => ' + self.username);
+        self.logger.info('Auth Method  => ' + self.auth);
         if self.auth == 'password':
-            self.logger.info('SSH Password = ' + str(self.password));
+            self.logger.info('SSH Password => ' + str(self.password));
         else:
-            self.logger.info('SSH Private Key = ' + str(self.password)); 
+            self.logger.info('SSH PrivKey  => ' + str(self.password)); 
 
         #rpc_msg = self._nc_xml_build('get-config', 'running', 'interfaces');
         #print(rpc_msg);
