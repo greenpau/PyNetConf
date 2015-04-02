@@ -82,7 +82,9 @@ class NetConfSession:
 
     def _nc_xml_build(self, t, p1=None, p2=None):
         self.logger.info('Building ' + t + ' ...');
-        if t == 'hello':
+        xb = None;
+        xa = None;
+        if t == 'client_hello':
             HELLO = etree.Element('hello');
             HELLO.attrib['xmlns'] = 'urn:ietf:params:xml:ns:netconf:base:1.0';
             CAPS = etree.SubElement(HELLO, 'capabilities');
@@ -90,56 +92,129 @@ class NetConfSession:
             CAPS_1.text = 'urn:ietf:params:netconf:base:1.1';
             CAPS_2 = etree.SubElement(CAPS, 'capability');
             CAPS_2.text = 'urn:ietf:params:netconf:capability:startup:1.0';
-            SESSION_ID = etree.SubElement(HELLO, 'session-id');
-            SESSION_ID.text = self._nc_session_id();
+            #SESSION_ID = etree.SubElement(HELLO, 'session-id');
+            #SESSION_ID.text = self._nc_session_id();
             xb = b'<?xml version="1.0" encoding="utf-8"?>\n' + etree.tostring(HELLO, pretty_print=True);
-            xa = xb.decode("utf-8");
+        elif t == 'close-session':
+            ROOT = etree.Element('rpc');
+            ROOT.attrib['message-id'] = self._nc_session_id();
+            ROOT.attrib['xmlns'] = 'urn:ietf:params:xml:ns:netconf:base:1.0';
+            CLOSE_SESSION = etree.SubElement(ROOT, 'close-session');
+            xb = b'<?xml version="1.0" encoding="utf-8"?>\n' + etree.tostring(ROOT, pretty_print=True);
+        elif t == 'get-config':
+            ROOT = etree.Element('rpc');
+            ROOT.attrib['message-id'] = self._nc_session_id();
+            ROOT.attrib['xmlns'] = 'urn:ietf:params:xml:ns:netconf:base:1.0';
+            ROOT.attrib['xmlns'] = 'http://www.cisco.com/nxos:1.0:nfcli';
+            GET_CONFIG = etree.SubElement(ROOT, 'get-config');
+            GET_CONFIG_SOURCE = etree.SubElement(GET_CONFIG, 'source');
+            if p1 == 'running':
+                etree.SubElement(GET_CONFIG_SOURCE, 'running');
+            if p2 == 'interfaces':
+                GET_CONFIG_FILTER = etree.SubElement(GET_CONFIG, 'filter');
+                GET_CONFIG_FILTER_CONFIG = etree.SubElement(GET_CONFIG_FILTER, 'Configuration');
+                etree.SubElement(GET_CONFIG_FILTER_CONFIG, 'InterfaceConfigurationTable');
+            xb = b'<?xml version="1.0" encoding="utf-8"?>\n' + etree.tostring(ROOT, pretty_print=True);
+        else:
+            self.logger.error('unrecognized netconf type => ' + t);
+            sys.exit(1);
+        xa = xb.decode("utf-8");
+        if self.xml_validation == True:
             if self._nc_xml_valid(xa) == False:
                 self.logger.error('failed netconf xml schema validation for ' + t + ' ...');
         self.logger.info('Building ' + t + ' ... done');
-        return xa;
+        return xa + ']]>]]>';
 
 
     def connect(self):
-        ''' Initialize SSH Session and exchange hello messages '''
-        self.logger.info('Connecting ...');
-        client_hello = self._nc_xml_build('hello');
-        self.logger.info('Sending client hello message:\n' + str(client_hello));
+        ''' Exchange hello messages '''
+
+        client_hello = self._nc_xml_build('client_hello');
 
         try:
+            self.logger.info('receiving server hello message ...');
+            while not self.nc_chan.recv_ready():
+                self.logger.info(self.host +  ' is not ready to receive data via this NETCONF channel, waiting ... ');
+                time.sleep(2);
+            server_hello = self.nc_chan.recv(65536);
+            self.logger.info('received server hello message:\n' + str(server_hello));
+
+
+            self.logger.info('sending client hello message:\n' + str(client_hello));
             while not self.nc_chan.send_ready():
                 self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
                 time.sleep(2);
             self.nc_chan.send(client_hello);
-
-            while not self.nc_chan.recv_ready():
-                self.logger.info(self.host +  ' is not ready to receive data via this NETCONF channel, waiting ... ');
-                time.sleep(2);
-
-            data = self.nc_chan.recv(65536);
-
-            self.logger.info('received: ' + str(data));
-
-            pass;
-            #self.nc_chan.send(client_hello);
-            #while not self.nc_chan.recv_ready():
-            #    logger.info("NETCONF channel is not ready ... ")
-            #    time.sleep(2);
+            self.logger.info('completed sending client hello message ...');
 
         except Exception as err:
             self.logger.error(str(err));
             self.logger.error(str(traceback.format_exc()));
+            self.error = True;
 
         return;
+
 
     def cmd(self, cmd=None):
         ''' Craft XML payload, send it, and parse XML response '''
         self.logger.info('Executing ' + str(cmd) + ' ...');
+
+        rpc_req = self._nc_xml_build('get-config', 'running', 'interfaces');
+
+        try:
+            self.logger.info('sending rpc message:\n' + str(rpc_req));
+            while not self.nc_chan.send_ready():
+                self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
+                time.sleep(2);
+            self.nc_chan.send(rpc_req);
+            self.logger.info('completed sending rpc message ...');
+
+            self.logger.info('receiving response ...');
+            while not self.nc_chan.recv_ready():
+                self.logger.info(self.host +  ' is not ready to receive data via this NETCONF channel, waiting ... ');
+                time.sleep(2);
+
+            rpc_resp = self.nc_chan.recv(65536);
+
+            self.logger.info('received response:\n' + str(rpc_resp));
+
+        except Exception as err:
+            self.logger.error(str(err));
+            self.logger.error(str(traceback.format_exc()));
+            self.error = True;
+
         return;
 
 
     def close(self):
         ''' Terminate NETCONF Session via close-session operation '''
+
+        close_session_req = self._nc_xml_build('close-session');
+
+        try:
+            self.logger.info('sending close-session message:\n' + str(close_session_req));
+            while not self.nc_chan.send_ready():
+                self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
+                time.sleep(2);
+            self.nc_chan.send(close_session_req);
+            self.logger.info('completed sending close-session message ...');
+
+#            ....#
+#
+#            self.logger.info('receiving response ...');
+#            while not self.nc_chan.recv_ready():
+#                self.logger.info(self.host +  ' is not ready to receive data via this NETCONF channel, waiting ... ');
+#                time.sleep(2);
+
+#            close_session_resp = self.nc_chan.recv(65536);
+
+#            self.logger.info('received response:\n' + str(close_session_resp));
+
+        except Exception as err:
+            self.logger.error(str(err));
+            self.logger.error(str(traceback.format_exc()));
+            self.error = True;
+
         return;
 
 
@@ -148,7 +223,7 @@ class NetConfSession:
         return;
 
 
-    def __init__(self, host=None, user=None, password=None, port=830, check_fingerprint=False, verbose=0):
+    def __init__(self, host=None, user=None, password=None, port=830, check_fingerprint=False, verbose=0, xml_validation=False):
         ''' Initialize NETCONF Session '''
         logging.basicConfig(format='%(asctime)s - %(name)s - %(funcName)s() - %(levelname)s - %(message)s');
         self.logger = logging.getLogger(__name__);
@@ -162,10 +237,11 @@ class NetConfSession:
         else:
             self.logger.setLevel(logging.ERROR);
 
-        self.sid = 0;
+        self.sid = 1000;
         self.error = False;
         self.resp = None;
         self.capabilities = {'client': None, 'server': None};
+        self.xml_validation = xml_validation;
 
         if isinstance(host, str):
             if re.match('^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', host):
@@ -220,6 +296,10 @@ class NetConfSession:
             self.logger.info('SSH Password = ' + str(self.password));
         else:
             self.logger.info('SSH Private Key = ' + str(self.password)); 
+
+        #rpc_msg = self._nc_xml_build('get-config', 'running', 'interfaces');
+        #print(rpc_msg);
+        #sys.exit(1)
 
         try:
             self.nc_sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM);

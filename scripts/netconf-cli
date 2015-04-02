@@ -34,6 +34,7 @@ except Exception as err:
         logger.error(str(type(err).__name__) + ': ' + str(e));
     sys.exit(1);
 
+
 def _load_credentials(h):
 
     logger.info('checking for local credentials ...');
@@ -48,13 +49,10 @@ def _load_credentials(h):
     if not os.access(f, os.R_OK):
         logger.error('credentials file ' + f + ' is not readable, exiting ...');
         sys.exit(1);
-
-    print( oct(stat.S_IMODE(os.stat(f).st_mode)))
     if not oct(stat.S_IMODE(os.stat(f).st_mode)) == '0o600':
         logger.error('credentials file ' + f + ' is not secure!');
         logger.error('try running "chmod 600 ' + f + '" to secure it, exiting ...');
         sys.exit(1);
-
     c = configparser.ConfigParser();
     c.read(f);
     if 'DEFAULT' not in c:
@@ -66,8 +64,8 @@ def _load_credentials(h):
     if 'password' not in c['DEFAULT'] and 'private_rsa_key' not in c['DEFAULT']:
         logger.error('credentials file is missing either "password" or "private_rsa_key" key in DEFAULT section, exiting ...');
         sys.exit(1);
-
     return(c['DEFAULT']['username'], c['DEFAULT']['password']);
+
 
 def main():
     global logger;
@@ -97,8 +95,10 @@ def main():
     cmd_group = parser.add_argument_group('directives');
     cmd_group.add_argument('-c', '--cmd', dest='icmd', metavar='COMMAND', action='append', 
                            type=str, required=True, help='commands');
-    auth_group.add_argument('--check-fingerprint', dest='ifc', action='store_true', 
+    auth_group.add_argument('--check-fingerprint', dest='ifc', action='store_true',
                             help='enable SSH fingerprint check');
+    auth_group.add_argument('--validate-xml', dest='vxml', action='store_true',
+                            help='enable XML validation');
     parser.add_argument('-l', '--log-level', dest='ilog', metavar='LEVEL', type=int, 
                         default=0, choices=range(1, 4), help='log level (default: 0)');
     args = parser.parse_args();
@@ -119,27 +119,29 @@ def main():
         iuser, ipass = _load_credentials(args.ihost);
 
     try:
+
         logger.info('building a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport) + ' ...');
-        nc = NetConfSession(args.ihost, iuser, ipass, args.iport, args.ifc, args.ilog);
+
+        nc = NetConfSession(args.ihost, iuser, ipass, args.iport, args.ifc, args.ilog, args.vxml);
         if nc.error:
             logger.error('failed to prepare for a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);
+
         nc.connect();
         if nc.error:
             logger.error('failed to establish a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);
         logger.info('connected to ' + args.ihost + ' over TCP port ' + str(args.iport) + ' for a NETCONF session');
 
-        ''' display client and server capabilities '''
-        nc.show('capabilities', 'client');  # alternatively, pprint.pprint(nc.capabilities['client']);
-        nc.show('capabilities', 'server');  # alternatively, pprint.pprint(nc.capabilities['server']);
+
+        #''' display client and server capabilities '''
+        #nc.show('capabilities', 'client');  # alternatively, pprint.pprint(nc.capabilities['client']);
+        #nc.show('capabilities', 'server');  # alternatively, pprint.pprint(nc.capabilities['server']);
 
         for c in args.icmd:            
             nc.cmd(c);
             if nc.error:
                 logger.error('failed to execute "' + c +'" command on ' + args.ihost);
-                sys.exit(1);
-            logger.info(str(nc.resp));
 
         nc.close();
         if nc.error:
