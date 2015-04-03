@@ -148,10 +148,17 @@ def main():
         #        logger.error('failed to execute "' + c +'" command on ' + args.ihost);
 
 
-        nc.rpc(['get-config', 'running', 'interfaces']);
+        #nc.rpc(['get-config', 'running', 'interfaces']);
+        #if nc.error:
+        #    logger.error('failed to get interface configuration from running config via a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
+        #    sys.exit(1);
+
+        nc.rpc(['edit-config', 'running', 'interface', 'description', '1/10', 'XML API TEST']);
         if nc.error:
-            logger.error('failed to get interface configuration from running config via a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
+            logger.error('failed to configure interface Ethernet1/10 via a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);
+
+
 
         nc.rpc(['close-session']);
         if nc.error:
