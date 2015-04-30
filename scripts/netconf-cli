@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #------------------------------------------------------------------------------------------#
-# File:      test.py                                                                       #
+# File:      netconf-cli                                                                   #
 # Purpose:   PyNetConf - IETF Network Configuration Protocol Client Library                #
 # Author:    Paul Greenberg                                                                #
 # Version:   1.0                                                                           #
@@ -22,6 +22,7 @@ import datetime;
 import traceback;
 import logging;
 import configparser;
+import re;
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(funcName)s() - %(levelname)s - %(message)s');
 logger = logging.getLogger(__file__);
@@ -37,9 +38,9 @@ except Exception as err:
 
 
 def _load_credentials(h):
-
     logger.info('checking for local credentials ...');
-
+    u = None;
+    p = None;
     f = os.path.join(os.environ['HOME'], '.netconf.rc');
     if not os.path.exists(f):
         logger.error('credentials file ' + f + ' does not exist, exiting ...');
@@ -54,18 +55,29 @@ def _load_credentials(h):
         logger.error('credentials file ' + f + ' is not secure!');
         logger.error('try running "chmod 600 ' + f + '" to secure it, exiting ...');
         sys.exit(1);
-    c = configparser.ConfigParser();
-    c.read(f);
-    if 'DEFAULT' not in c:
-        logger.error('credentials file is missing DEFAULT section, exiting ...');
+    conf = configparser.ConfigParser();
+    conf.read(f);
+    selected_section = None;
+    sections = conf.sections();
+    for section in sections:
+        options = conf.options(section);
+        if 'regex' in options:
+            if re.match(conf.get(section, 'regex'), h):
+                selected_section = section;
+                break;
+        elif 'default' in options:
+            selected_section = section;
+        else:
+            pass;
+    if selected_section is not None:
+        if conf.has_option(selected_section, 'username') is True:
+            u = conf.get(selected_section, 'username');
+        if conf.has_option(selected_section, 'password') is True:
+            p = conf.get(selected_section, 'password');
+    if u is None or p is None:
+        logger.error('section ' + selected_section + ' of credentials file lacks valid credentials');
         sys.exit(1);
-    if 'username' not in c['DEFAULT']:
-        logger.error('credentials file is missing "username" key in DEFAULT section, exiting ...');
-        sys.exit(1);
-    if 'password' not in c['DEFAULT'] and 'private_rsa_key' not in c['DEFAULT']:
-        logger.error('credentials file is missing either "password" or "private_rsa_key" key in DEFAULT section, exiting ...');
-        sys.exit(1);
-    return(c['DEFAULT']['username'], c['DEFAULT']['password']);
+    return(u, p);
 
 
 def main():
@@ -73,9 +85,10 @@ def main():
     func = 'main()';
     descr = 'PyNetConf - IETF Network Configuration Protocol Client Library\n\n';
     descr += 'examples:\n \n';
-    descr += '  python3 ' + str(__file__) + ' -ho router -P 22 -u admin -p cisco -c "show run" -l 3\n \n';
-    descr += '  python3 ' + str(__file__) + ' -ho router -u admin -k ~/.ssh/id_rsa \\\n';
-    descr += '    --cmd "show interfaces" --cmd "show version" -l 5\n \n';
+    descr += '  python3 ' + str(__file__) + ' -ho ny-sw01 -t "n3k" -l 3 \\\n';
+    descr += '    --cmd "show xml server status" --cmd "show running config" --cmd "show version" \\\n';
+    descr += '    --cmd "edit-config running interface ethernet 1/13 description \'XML API TEST\'"\n \n';
+    descr += '  python3 ' + str(__file__) + ' -ho ny-sw01 -u admin -k ~/.ssh/id_rsa --cmd "show version" -l 3\n \n';
     descr += '  python3 ' + str(__file__) + ' --help';
     epil = 'documentation:\n  https://github.com/greenpau/PyNetConf\n \n';
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -84,7 +97,7 @@ def main():
     conn_group.add_argument('-ho', '--host', dest='ihost', metavar='HOST', 
                             type=str, required=True, help='host IP or DNS Name');
     conn_group.add_argument('-t', '--type', dest='itype', metavar='TYPE', 
-                            type=str, default='nxos3000', choices=['nxos3000'], required=True, 
+                            type=str, default='n3k', choices=['n3k'], required=True,
                             help='host typehost IP or DNS Name');
     conn_group.add_argument('-P', '--port', dest='iport', metavar='PORT', 
                             type=int, default=22, help='tcp port (default: 22)');
@@ -123,54 +136,26 @@ def main():
         iuser, ipass = _load_credentials(args.ihost);
 
     try:
-
-        logger.info('building a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport) + ' ...');
-
+        logger.info('initiating NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport) + ' ...');
         nc = NetConfSession(args.ihost, args.itype, iuser, ipass, args.iport, args.ifc, args.ilog, args.vxml);
         if nc.error:
-            logger.error('failed to prepare for a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);
-
-        nc.rpc(['client-hello']);
+        nc.rpc('client-hello');
         if nc.error:
-            logger.error('failed to establish a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);
-        logger.info('connected to ' + args.ihost + ' over TCP port ' + str(args.iport) + ' for a NETCONF session');
-
-
-        #''' display client and server capabilities '''
-        #nc.show('capabilities', 'client');  # alternatively, pprint.pprint(nc.capabilities['client']);
-        #nc.show('capabilities', 'server');  # alternatively, pprint.pprint(nc.capabilities['server']);
-
-        #for c in args.icmd:            
-        #    nc.cmd(c);
-        #    if nc.error:
-        #        logger.error('failed to execute "' + c +'" command on ' + args.ihost);
-
-
-        #nc.rpc(['get-config', 'running', 'interfaces']);
-        #if nc.error:
-        #    logger.error('failed to get interface configuration from running config via a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
-        #    sys.exit(1);
-
-        nc.rpc(['edit-config', 'running', 'interface', 'description', '1/10', 'XML API TEST']);
+        for cmd in args.icmd:
+            nc.rpc(cmd);
+            if nc.error:
+                sys.exit(1);
+        nc.rpc('close-session');
         if nc.error:
-            logger.error('failed to configure interface Ethernet1/10 via a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
             sys.exit(1);
-
-
-
-        nc.rpc(['close-session']);
-        if nc.error:
-            logger.error('failed to graceful disconnect a NETCONF session to ' + args.ihost + ' over TCP port ' + str(args.iport));
-            sys.exit(1);
-
     except Exception as err:
         for e in err.args:
             logger.error(str(type(err).__name__) + ': ' + str(e));
         for i in str(traceback.format_exc()).splitlines():
             logger.error(str(type(err).__name__) + ': ' + str(i));
-        return;
+        sys.exit(1);
     
     sys.exit(0);
 

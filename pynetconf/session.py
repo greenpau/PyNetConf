@@ -209,8 +209,9 @@ class NetConfSession:
         return str(self.mid);
 
 
-    def _nc_xml_build(self, t, p1=None, p2=None, p3=None, p4=None, p5=None):
-        self.logger.info('Building ' + t + ' ...');
+    def _nc_xml_build(self, args):
+        pprint.pprint(args);
+        self.logger.info('Building ' + args[0] + ' ...');
         xb = None;
         xa = None;
         NC_NS = 'urn:ietf:params:xml:ns:netconf:base:1.0';
@@ -218,8 +219,8 @@ class NetConfSession:
         NF_NS = 'http://www.cisco.com/nxos:1.0:nfcli';
         ROOT = None;
 
-        if t == 'client-hello':
-            if self.host_type in ['nxos3000']:
+        if args[0] == 'client-hello':
+            if self.host_type in ['n3k']:
                 ROOT = etree.Element('{' + NC_NS + '}hello', nsmap={'nc': NC_NS});
                 CAPS = etree.SubElement(ROOT, '{'+ NC_NS + '}capabilities');
                 CAPS_1 = etree.SubElement(CAPS, '{'+ NC_NS + '}capability');
@@ -231,49 +232,80 @@ class NetConfSession:
                 CAPS_1.text = 'urn:ietf:params:netconf:base:1.0';
                 CAPS_2 = etree.SubElement(CAPS, 'capability');
                 CAPS_2.text = 'urn:ietf:params:netconf:capability:startup:1.0';
-            if self.host_type not in ['nxos3000']:
+            if self.host_type not in ['n3k']:
                 SESSION_ID = etree.SubElement(ROOT, 'session-id');
                 SESSION_ID.text = self._nc_session_id();
-        elif t == 'close-session':
+        elif args[0] == 'close-session':
             ROOT = etree.Element('rpc');
             ROOT.attrib['message-id'] = self._nc_message_id();
             ROOT.attrib['xmlns'] = 'urn:ietf:params:xml:ns:netconf:base:1.0';
             CLOSE_SESSION = etree.SubElement(ROOT, 'close-session');
-        elif t == 'edit-config':
-            if self.host_type in ['nxos3000']:
+        elif args[0] == 'edit-config':
+            if self.host_type in ['n3k']:
                 ROOT = etree.Element('{' + NC_NS + '}rpc', nsmap={'nc': NC_NS});
                 ROOT.attrib['xmlns'] = 'http://www.cisco.com/nxos:1.0:if_manager';
                 ROOT.attrib['message-id'] = self._nc_message_id();
                 CONF = etree.SubElement(ROOT, '{'+ NC_NS + '}edit-config');
                 CONF_TARGET = etree.SubElement(CONF, '{'+ NC_NS + '}target');                
-                if p1 == 'running':
+                if args[1] == 'running':
                     etree.SubElement(CONF_TARGET, '{'+ NC_NS + '}running');
+                else:
+                    self.logger.error('unsupported config mode: ' + args[1]);
+                    self.error = True;
+                    return;
                 CONF_CH = etree.SubElement(CONF, '{'+ NC_NS + '}config');
                 CONF_CH_INIT = etree.SubElement(CONF_CH, 'configure');
                 CONF_CH_MODE = etree.SubElement(CONF_CH_INIT, '__XML__MODE__exec_configure');
-                CONF_CH_IFS = etree.SubElement(CONF_CH_MODE, 'interface');
-                #CONF_CH_IFTYPE = etree.SubElement(CONF_CH_IFS, 'ethernet');
-                CONF_CH_IFTYPE = etree.SubElement(CONF_CH_IFS, 'vem-ethernet');
-                CONF_CH_IF = etree.SubElement(CONF_CH_IFTYPE, 'interface');
-                CONF_CH_IF.text = str(p4);
-                #CONF_CH_MODE_IF = etree.SubElement(CONF_CH_IFTYPE,'__XML__MODE_if-ethernet');
-                CONF_CH_MODE_IF = etree.SubElement(CONF_CH_IFTYPE,'__XML__MODE_if-vem-ethernet');
-                CONF_CH_MODE_IF_BASE = etree.SubElement(CONF_CH_MODE_IF, '__XML__MODE_if-eth-base');
-                CONF_CH_MODE_IF_BASE_DESCRIPTION = etree.SubElement(CONF_CH_MODE_IF_BASE, 'description');
-                CONF_CH_MODE_IF_BASE_DESCRIPTION_TEXT = etree.SubElement(CONF_CH_MODE_IF_BASE_DESCRIPTION, 'desc_line');
-                CONF_CH_MODE_IF_BASE_DESCRIPTION_TEXT.text = str(p5);
-        elif t == 'get-config':
-            if self.host_type in ['nxos3000']:
-                ROOT = etree.Element('{' + NC_NS + '}rpc', nsmap={'nc': NC_NS, 'xsi': XML_NS, 'nf': NF_NS});
+                if args[2] == 'interface':
+                    CONF_CH_IFS = etree.SubElement(CONF_CH_MODE, 'interface');
+                else:
+                    self.logger.error('unsupported config section: ' + args[2]);
+                    self.error = True;
+                    return;
+                if args[3] == 'ethernet':
+                    CONF_CH_IFTYPE = etree.SubElement(CONF_CH_IFS, 'ethernet');
+                    CONF_CH_IF = etree.SubElement(CONF_CH_IFTYPE, 'interface');
+                    CONF_CH_IF.text = str(args[4]);
+                    CONF_CH_MODE_IF = etree.SubElement(CONF_CH_IFTYPE,'__XML__MODE_if-ethernet');
+                    CONF_CH_MODE_IF_BASE = etree.SubElement(CONF_CH_MODE_IF, '__XML__MODE_if-eth-base');
+                else:
+                    self.logger.error('unsupported interface type: ' + args[3]);
+                    self.error = True;
+                    return;
+                if args[5] == 'description':
+                    CONF_CH_MODE_IF_BASE_SETTING = etree.SubElement(CONF_CH_MODE_IF_BASE, 'description');
+                    CONF_CH_MODE_IF_BASE_SETTING_TEXT = etree.SubElement(CONF_CH_MODE_IF_BASE_SETTING, 'desc_line');
+                    CONF_CH_MODE_IF_BASE_SETTING_TEXT.text = str(args[6]);
+                else:
+                    self.logger.error('unsupported interface setting: ' + args[5]);
+                    self.error = True;
+                    return;
+        elif args[0] == 'get':
+            if self.host_type in ['n3k']:
+                ROOT = etree.Element('{' + NC_NS + '}rpc', nsmap={'nc': NC_NS});
                 ROOT.attrib['message-id'] = self._nc_message_id();
-                GET_CONFIG = etree.SubElement(ROOT, '{'+ NC_NS + '}get-config');
-                GET_CONFIG_SOURCE = etree.SubElement(GET_CONFIG, '{'+ NC_NS + '}source');
-                if p1 == 'running':
-                    etree.SubElement(GET_CONFIG_SOURCE, '{'+ NC_NS + '}running');
-                #if p2 == 'interfaces':
-                #    GET_CONFIG_FILTER = etree.SubElement(GET_CONFIG, 'filter');
-                #    GET_CONFIG_FILTER_CONFIG = etree.SubElement(GET_CONFIG_FILTER, 'Configuration');
-                #    etree.SubElement(GET_CONFIG_FILTER_CONFIG, 'InterfaceConfigurationTable');
+                if args[1] == 'show' and args[2] in ['version', 'config']:
+                    ROOT.attrib['xmlns'] = 'http://www.cisco.com/nxos:1.0:sysmgrcli';
+                if args[1] == 'show' and args[2] in ['xml']:
+                    ROOT.attrib['xmlns'] = 'http://www.cisco.com/nxos:1.0:xml';
+                GET = etree.SubElement(ROOT, '{'+ NC_NS + '}get');
+                GET_FILTER = etree.SubElement(GET, '{'+ NC_NS + '}filter');
+                GET_FILTER.attrib['type'] = 'subtree';
+                if args[1] == 'show':
+                    GET_SHOW = etree.SubElement(GET_FILTER, 'show');
+                if args[2] == 'version':
+                    GET_SHOW_VER = etree.SubElement(GET_SHOW, 'version');
+                if args[2] == 'config' and args[3] == 'running':
+                    GET_SHOW_RUN = etree.SubElement(GET_SHOW, 'running-config');
+                    GET_SHOW_RUN.text = '\n';
+                if args[2] == 'xml' and args[3] == 'server' and args[4] == 'status':
+                    GET_SHOW_XML = etree.SubElement(GET_SHOW, 'xml');
+                    GET_SHOW_XML_SERVER = etree.SubElement(GET_SHOW_XML, 'server');
+                    GET_SHOW_XML_SERVER_STATUS = etree.SubElement(GET_SHOW_XML_SERVER, 'status');
+        elif args[0] == 'get-config':
+            if self.host_type in ['n3k']:
+                self.logger.error('get-config is unsupported on Cisco Nexus 3K platform, exiting ...');
+                sys.exit(1);
             else:
                 ROOT = etree.Element('rpc');
                 ROOT.attrib['message-id'] = self._nc_message_id();
@@ -281,14 +313,14 @@ class NetConfSession:
                 ROOT.attrib['xmlns'] = 'http://www.cisco.com/nxos:1.0:nfcli';
                 GET_CONFIG = etree.SubElement(ROOT, 'get-config');
                 GET_CONFIG_SOURCE = etree.SubElement(GET_CONFIG, 'source');
-                if p1 == 'running':
+                if args[1] == 'running':
                     etree.SubElement(GET_CONFIG_SOURCE, 'running');
-                if p2 == 'interfaces':
+                if args[2] == 'interfaces':
                     GET_CONFIG_FILTER = etree.SubElement(GET_CONFIG, 'filter');
                     GET_CONFIG_FILTER_CONFIG = etree.SubElement(GET_CONFIG_FILTER, 'Configuration');
                     etree.SubElement(GET_CONFIG_FILTER_CONFIG, 'InterfaceConfigurationTable');
         else:
-            self.logger.error('unrecognized netconf type => ' + t);
+            self.logger.error(args[0] + ' is unrecognized netconf type, exiting ...');
             sys.exit(1);
 
         xb = b'<?xml version="1.0" encoding="utf-8"?>\n' + etree.tostring(ROOT, pretty_print=True);
@@ -296,57 +328,63 @@ class NetConfSession:
         if self.xml_validation == True:
             if self._nc_xml_valid(xa) == False:
                 self.logger.error('failed netconf xml schema validation for ' + t + ' ...');
-        self.logger.info('Building ' + t + ' ... done');
+        self.logger.info('Building ' + args[0] + ' ... done');
         return xa + ']]>]]>';
 
 
-    def rpc(self, cmds=[]):
+    def _rpc_filter(self, cmd):
+        r = [];
+        if cmd is None:
+            return None;
+        rgx_int = re.match(r'(edit-config) (running) (interface) (ethernet) (\d+/\d+) (description) \'(.*)\'$', cmd);
+        if re.match('client-hello', cmd):
+            return(['client-hello']);
+        elif re.match('close-session', cmd):
+            return(['close-session']);
+        elif rgx_int:
+            for i in range(1, 8):
+                r.append(rgx_int.group(i));
+            return r;
+        else:
+            self.logger.error('unsupported RPC: ' + cmd);
+            self.error = True;
+            return None;
+
+    def rpc(self, cmd):
         ''' Communicate RPC messages over NETCONF Session '''
+
+        cmds = self._rpc_filter(cmd);
+        if cmds is None:
+            return;
 
         self.logger.info('RPC Request: ' + '/'.join(cmds) + ' ...');
 
-        rpc_msg = None;
-        rpc_req = None;
+        rpc_action = cmds[0];
+        rpc_req = self._nc_xml_build(cmds);
 
-        if len(cmds) == 6:
-            rpc_msg = cmds[0];
-            rpc_req = self._nc_xml_build(rpc_msg, cmds[1], cmds[2], cmds[3], cmds[4], cmds[5]); 
-        elif len(cmds) == 5:
-            rpc_msg = cmds[0];
-            rpc_req = self._nc_xml_build(rpc_msg, cmds[1], cmds[2], cmds[3], cmds[4]); 
-        elif len(cmds) == 4:
-            rpc_msg = cmds[0];
-            rpc_req = self._nc_xml_build(rpc_msg, cmds[1], cmds[2], cmds[3]); 
-        elif len(cmds) == 3:
-            rpc_msg = cmds[0];
-            rpc_req = self._nc_xml_build(rpc_msg, cmds[1], cmds[2]); 
-        elif len(cmds) == 2:
-            rpc_msg = cmds[0];
-            rpc_req = self._nc_xml_build(rpc_msg, cmds[1]); 
-        else:
-            rpc_msg = cmds[0];
-            rpc_req = self._nc_xml_build(rpc_msg);
+        if rpc_req is None:
+            return;
 
         try:
-            if rpc_msg not in ['client-hello']:
-                self.logger.info('sending ' + rpc_msg + ' RPC message:\n' + str(rpc_req));
+            if rpc_action not in ['client-hello']:
+                self.logger.info('sending ' + rpc_action + ' RPC message:\n' + str(rpc_req));
                 while not self.nc_chan.send_ready():
                     self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
                     time.sleep(2);
                 rc = self.nc_chan.send(rpc_req);
                 if rc == 0:
-                    self.logger.error('failed to send rpc ' + rpc_msg + ' message, because the channel stream is closes ...');
+                    self.logger.error('failed to send rpc ' + rpc_action + ' message, because the channel stream is closes ...');
                     self.error = True;
                     return;
                 else:
-                    self.logger.info('the rpc ' + rpc_msg + ' message (' + str(rc) + ') was sent successfully ...');
+                    self.logger.info('the rpc ' + rpc_action + ' message (' + str(rc) + ') was sent successfully ...');
 
             
             ''' receiving rpc message '''
-            if rpc_msg in ['client-hello']:
+            if rpc_action in ['client-hello']:
                 self.logger.info('receiving server-hello RPC message ...');
             else:
-                self.logger.info('receiving response to ' + rpc_msg + ' RPC message ...');
+                self.logger.info('receiving response to ' + rpc_action + ' RPC message ...');
             while not self.nc_chan.recv_ready():
                 self.logger.info(self.host +  ' is not ready to receive data via this NETCONF channel, waiting ... ');
                 time.sleep(2);
@@ -356,34 +394,33 @@ class NetConfSession:
                 self.logger.info('received XML response (' + rpc_id + '):\n' + rpc_resp_xml);
                 self.logger.info('dictionary:\n' + pprint.pformat(rpc_resp_dict));
             else:
-                self.logger.error('failed to parse rpc ' + rpc_msg + ' response message ...');                
+                self.logger.error('failed to parse rpc ' + rpc_action + ' response message ...');
                 self.logger.error('review the received XML rpc response:\n' + str(rpc_resp_raw));
                 self.error = True;
                 return;
-            if rpc_msg in ['client-hello']:
+            if rpc_action in ['client-hello']:
                 self.sid = int(rpc_id);
 
 
             ''' sending client hello rpc message '''
-            if rpc_msg in ['client-hello']:
-                rpc_req = self._nc_xml_build(rpc_msg);
-                self.logger.info('sending ' + rpc_msg + ' RPC message:\n' + str(rpc_req));
+            if rpc_action in ['client-hello']:
+                rpc_req = self._nc_xml_build(['client-hello']);
+                self.logger.info('sending ' + rpc_action + ' RPC message:\n' + str(rpc_req));
                 while not self.nc_chan.send_ready():
                     self.logger.info('NETCONF channel to ' + self.host +  ' is busy, waiting ... ');
                     time.sleep(2);
                 rc = self.nc_chan.send(rpc_req);
                 if rc == 0:
-                    self.logger.error('failed to send rpc ' + rpc_msg + ' message, because the channel stream is closes ...');
+                    self.logger.error('failed to send rpc ' + rpc_action + ' message, because the channel stream is closes ...');
                     self.error = True;
                     return;
                 else:
-                    self.logger.info('the rpc ' + rpc_msg + ' message (' + str(rc) + ') was sent successfully ...');
+                    self.logger.info('the rpc ' + rpc_action + ' message (' + str(rc) + ') was sent successfully ...');
 
         except Exception as err:
             self.logger.error(str(err));
             self.logger.error(str(traceback.format_exc()));
             self.error = True;
-
         return;
 
 
@@ -420,10 +457,10 @@ class NetConfSession:
             return;
 
         if isinstance(host_type, str):
-            if host_type in ['nxos3000']:
+            if host_type in ['n3k']:
                 self.host_type = host_type;
             else:
-                self.logger.error('the only supported type(s): nxos3000');
+                self.logger.error('the only supported type(s): n3k');
                 self.error = True;
                 return;
         else:
@@ -477,20 +514,9 @@ class NetConfSession:
         else:
             self.logger.info('SSH PrivKey  => **********'); 
 
-        #rpc_msg = self._nc_xml_build('client-hello');
-        #rpc_msg = self._nc_xml_build('get-config', 'running', 'interfaces');
-        #print(rpc_msg);
-
-        rpc_resp = b'''<?xml version="1.0" encoding="ISO-8859-1"?>
-<hello xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
-  <capabilities abc="123">
-    <capability>urn:ietf:params:xml:ns:netconf:base:1.0</capability>
-    <capability>urn:ietf:params:netconf:base:1.0</capability>
-  </capabilities>
-  <session-id>13044</session-id>
-</hello>
-]]>]]>'''
-        #self._nc_resp_to_xml(rpc_resp);
+        #rpc_action = self._nc_xml_build('client-hello');
+        #rpc_action = self._nc_xml_build('get-config', 'running', 'interfaces');
+        #print(rpc_action);
         #sys.exit(1)
 
         try:
@@ -503,5 +529,5 @@ class NetConfSession:
         except Exception as err:
             self.logger.error(str(err));
             self.logger.error(str(traceback.format_exc()));
-            
+            self.error = True;
         return;
